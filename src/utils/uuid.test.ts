@@ -1,38 +1,50 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createUuidv4, ensureNonZeroUuid, zeroUuid } from './uuid'
+import { UuidGenerationError, createUuidv4 } from './uuid'
+
+const UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 describe('createUuidv4', () => {
-  it('uses secure random values when randomUUID is unavailable', () => {
-    vi.stubGlobal('crypto', {
-      getRandomValues: (bytes: Uint8Array) => bytes.fill(0)
-    })
+  it('uses crypto.randomUUID when available', () => {
+    const randomUUID = vi.fn(() => '12345678-1234-4abc-8def-123456789abc')
+    const getRandomValues = vi.fn()
+    vi.stubGlobal('crypto', { randomUUID, getRandomValues })
 
-    expect(createUuidv4()).toBe('00000000-0000-4000-8000-000000000000')
+    expect(createUuidv4()).toBe('12345678-1234-4abc-8def-123456789abc')
+    expect(randomUUID).toHaveBeenCalledOnce()
+    expect(getRandomValues).not.toHaveBeenCalled()
   })
 
-  it('throws when Web Crypto is unavailable', () => {
+  it('uses crypto.getRandomValues when randomUUID is unavailable', () => {
+    const getRandomValues = vi.fn((values: Uint32Array) => {
+      values.forEach((_, index) => {
+        values[index] = index * 2654435761
+      })
+      return values
+    })
+    vi.stubGlobal('crypto', { randomUUID: undefined, getRandomValues })
+
+    const uuid = createUuidv4()
+
+    expect(getRandomValues).toHaveBeenCalledOnce()
+    expect(uuid).toMatch(UUID_V4_PATTERN)
+  })
+
+  it('throws a named UuidGenerationError when Web Crypto is unavailable', () => {
     vi.stubGlobal('crypto', undefined)
 
+    expect(() => createUuidv4()).toThrow(UuidGenerationError)
     expect(() => createUuidv4()).toThrow(
       'Web Crypto is required to generate a UUID'
     )
-  })
-})
-
-describe('ensureNonZeroUuid', () => {
-  it('replaces the zero uuid and returns the new id', () => {
-    const entity = { id: zeroUuid }
-
-    const id = ensureNonZeroUuid(entity)
-
-    expect(id).not.toBe(zeroUuid)
-    expect(entity.id).toBe(id)
+    expect(new UuidGenerationError('x').name).toBe('UuidGenerationError')
   })
 
-  it('keeps an existing non-zero id', () => {
-    const entity = { id: 'ffffffff-ffff-4fff-bfff-ffffffffffff' }
+  it('mints unique UUIDv4 values across a sanity sample', () => {
+    const uuids = Array.from({ length: 1_000 }, () => createUuidv4())
 
-    expect(ensureNonZeroUuid(entity)).toBe(entity.id)
+    expect(uuids.every((uuid) => UUID_V4_PATTERN.test(uuid))).toBe(true)
+    expect(new Set(uuids).size).toBe(uuids.length)
   })
 })
