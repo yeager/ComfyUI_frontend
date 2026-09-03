@@ -71,10 +71,6 @@ const dispatchPendingCheckoutChangeEvent = () => {
   window.dispatchEvent(new Event(PENDING_SUBSCRIPTION_CHECKOUT_EVENT))
 }
 
-const createAttemptId = (): string => {
-  return generateUUID()
-}
-
 const getStorage = (): Storage | null => {
   let storage: Storage | null
 
@@ -246,7 +242,7 @@ export const createPendingSubscriptionCheckoutAttempt = (
   input: PendingSubscriptionCheckoutAttemptInput
 ): PendingSubscriptionCheckoutAttempt => {
   return {
-    attempt_id: createAttemptId(),
+    attempt_id: generateUUID(),
     started_at_ms: Date.now(),
     tier: input.tier,
     cycle: input.cycle,
